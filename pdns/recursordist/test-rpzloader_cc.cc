@@ -1,15 +1,14 @@
 #define BOOST_TEST_RPZ_LOADER
 #define BOOST_TEST_RPZ_LOADER
-
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 #include <array>
 
 #include "arguments.hh"
 #include "rpzloader.hh"
-#include "recpacketcache.hh"
-
-std::unique_ptr<RecursorPacketCache> g_packetCache;
+#include "syncres.hh"
 
 #include <boost/test/unit_test.hpp>
 
@@ -106,8 +105,7 @@ BOOST_AUTO_TEST_CASE(load_rpz_ok)
   ::arg().set("max-generate-steps") = "1";
   ::arg().set("max-include-depth") = "20";
   auto zone = std::make_shared<DNSFilterEngine::Zone>();
-  std::unordered_set<DNSName> affected;
-  auto soa = loadRPZFromFile(rpz, zone, std::nullopt, false, 3600, affected, true);
+  auto soa = loadRPZFromFile(rpz, zone, std::nullopt, false, 3600);
   unlink(rpz.c_str());
 
   BOOST_CHECK_EQUAL(soa->d_st.serial, 1U);
@@ -135,8 +133,8 @@ BOOST_AUTO_TEST_CASE(load_rpz_dups)
   ::arg().set("max-generate-steps") = "1";
   ::arg().set("max-include-depth") = "20";
   auto zone = std::make_shared<DNSFilterEngine::Zone>();
-  std::unordered_set<DNSName> affected;
-  BOOST_CHECK_THROW(loadRPZFromFile(rpz, zone, std::nullopt, false, 3600, affected, true),
+
+  BOOST_CHECK_THROW(loadRPZFromFile(rpz, zone, std::nullopt, false, 3600),
                     std::runtime_error);
   unlink(rpz.c_str());
 }
@@ -162,8 +160,7 @@ BOOST_AUTO_TEST_CASE(load_rpz_dups_allow)
   ::arg().set("max-include-depth") = "20";
   auto zone = std::make_shared<DNSFilterEngine::Zone>();
   zone->setIgnoreDuplicates(true);
-  std::unordered_set<DNSName> affected;
-  auto soa = loadRPZFromFile(rpz, zone, std::nullopt, false, 3600, affected, true);
+  auto soa = loadRPZFromFile(rpz, zone, std::nullopt, false, 3600);
   unlink(rpz.c_str());
   BOOST_CHECK_EQUAL(soa->d_st.serial, 1000000000U);
   BOOST_CHECK_EQUAL(zone->getDomain(), DNSName("."));

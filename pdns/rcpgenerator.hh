@@ -68,21 +68,12 @@ public:
   void xfrRFC1035CharString(string &val);
   void xfrSVCBValueList(vector<string> &val);
 
-  std::string getRemaining() const {
+  const string getRemaining() const {
     return d_string.substr(d_pos);
   }
 
-  bool eof() const;
 
-#if defined(PDNS_AUTH) // [
-  /* This method is only there for parity with DNSParser::consumeRemaining(),
-     see the comment there to know why it is needed.
-  */
-  void consumeRemaining() const
-  {
-  }
-#endif // ]
-
+  bool eof();
 private:
   string d_string;
   ZoneName d_zone;
@@ -115,22 +106,13 @@ public:
   void xfrBlob(const string& val, int len=-1);
   void xfrHexBlob(const string& val, bool keepReading=false);
   void xfrSvcParamKeyVals(const set<SvcParam>& val);
+  bool eof() { return true; };
+
   void xfrSVCBValueList(const vector<string> &val);
 
-  bool eof() const { return true; };
-
-  std::string getRemaining() const {
+  const string getRemaining() const {
      return "";
   }
-
-  #if defined(PDNS_AUTH) // [
-  /* This method is only there for parity with DNSParser::consumeRemaining(),
-     see the comment there to know why it is needed.
-  */
-  void consumeRemaining() const
-  {
-  }
-#endif // ]
 private:
   string& d_string;
   bool d_nodot;

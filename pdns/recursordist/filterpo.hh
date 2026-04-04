@@ -360,13 +360,6 @@ public:
       return d_zoneData->d_name;
     }
 
-    void getQNames(std::unordered_set<DNSName>& names) const
-    {
-      for (const auto& pol : d_qpolName) {
-        names.emplace(pol.first);
-      }
-    }
-
     [[nodiscard]] DNSName getDomain() const
     {
       return d_domain;

@@ -53,7 +53,4 @@ void setupLuaVars(LuaContext& luaCtx)
                                                     {"VERSION2", DNSCryptExchangeVersion::VERSION2},
                                                   });
 #endif
-
-  using Features = LuaAssociativeTable<boost::variant<string, bool, int, double>>;
-  luaCtx.writeVariable("pdns_features", Features{{"protobuf_tags_prefixes", true}});
 }

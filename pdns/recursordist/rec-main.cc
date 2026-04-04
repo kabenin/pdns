@@ -3448,14 +3448,14 @@ static void* pleaseInitPolCounts(const string& name)
   return nullptr;
 }
 
-static bool activateRPZFile(const RPZTrackerParams& params, LuaConfigItems& lci, shared_ptr<DNSFilterEngine::Zone>& zone, std::unordered_set<DNSName>& affected)
+static bool activateRPZFile(const RPZTrackerParams& params, LuaConfigItems& lci, shared_ptr<DNSFilterEngine::Zone>& zone)
 {
   auto log = lci.d_slog->withValues("file", Logging::Loggable(params.zoneXFRParams.name));
 
   zone->setName(params.polName.empty() ? "rpzFile" : params.polName);
   try {
     log->info(Logr::Info, "Loading RPZ from file");
-    loadRPZFromFile(params.zoneXFRParams.name, zone, params.defpol, params.defpolOverrideLocal, params.maxTTL, affected, params.wipePacketCache);
+    loadRPZFromFile(params.zoneXFRParams.name, zone, params.defpol, params.defpolOverrideLocal, params.maxTTL);
     log->info(Logr::Info, "Done loading RPZ from file");
   }
   catch (const std::exception& e) {
@@ -3466,14 +3466,14 @@ static bool activateRPZFile(const RPZTrackerParams& params, LuaConfigItems& lci,
   return true;
 }
 
-static void activateRPZPrimary(RPZTrackerParams& params, LuaConfigItems& lci, shared_ptr<DNSFilterEngine::Zone>& zone, const DNSName& domain, std::unordered_set<DNSName>& affected)
+static void activateRPZPrimary(RPZTrackerParams& params, LuaConfigItems& lci, shared_ptr<DNSFilterEngine::Zone>& zone, const DNSName& domain)
 {
   auto log = lci.d_slog->withValues("seedfile", Logging::Loggable(params.seedFileName), "zone", Logging::Loggable(params.zoneXFRParams.name));
 
   if (!params.seedFileName.empty()) {
     log->info(Logr::Info, "Pre-loading RPZ zone from seed file");
     try {
-      params.zoneXFRParams.soaRecordContent = loadRPZFromFile(params.seedFileName, zone, params.defpol, params.defpolOverrideLocal, params.maxTTL, affected, params.wipePacketCache);
+      params.zoneXFRParams.soaRecordContent = loadRPZFromFile(params.seedFileName, zone, params.defpol, params.defpolOverrideLocal, params.maxTTL);
 
       if (zone->getDomain() != domain) {
         throw PDNSException("The RPZ zone " + params.zoneXFRParams.name + " loaded from the seed file (" + zone->getDomain().toString() + ") does not match the one passed in parameter (" + domain.toString() + ")");
@@ -3496,8 +3496,6 @@ static void activateRPZPrimary(RPZTrackerParams& params, LuaConfigItems& lci, sh
 
 static void activateRPZs(LuaConfigItems& lci)
 {
-  std::unordered_set<DNSName> affected;
-
   for (auto& params : lci.rpzs) {
     auto zone = std::make_shared<DNSFilterEngine::Zone>();
     if (params.zoneXFRParams.zoneSizeHint != 0) {
@@ -3521,7 +3519,7 @@ static void activateRPZs(LuaConfigItems& lci)
     zone->setIgnoreDuplicates(params.ignoreDuplicates);
 
     if (params.zoneXFRParams.primaries.empty()) {
-      if (activateRPZFile(params, lci, zone, affected)) {
+      if (activateRPZFile(params, lci, zone)) {
         lci.dfe.addZone(zone);
       }
     }
@@ -3530,13 +3528,9 @@ static void activateRPZs(LuaConfigItems& lci)
       zone->setDomain(domain);
       zone->setName(params.polName.empty() ? params.zoneXFRParams.name : params.polName);
       params.zoneXFRParams.zoneIdx = lci.dfe.addZone(zone);
-      activateRPZPrimary(params, lci, zone, domain, affected);
+      activateRPZPrimary(params, lci, zone, domain);
     }
     broadcastFunction([name = zone->getName()] { return pleaseInitPolCounts(name); });
-  }
-
-  if (g_packetCache) {
-    g_packetCache->doWipePacketCache(affected);
   }
 }
 

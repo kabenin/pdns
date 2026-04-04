@@ -4,6 +4,8 @@ Netmask
 .. function:: newNetmask(str) -> Netmask
               newNetmask(ca, bits) -> Netmask
 
+  .. versionadded:: 1.5.0
+
   Returns a Netmask
 
   :param string str: A netmask, like ``192.0.2.0/24``.
@@ -11,6 +13,8 @@ Netmask
   :param int bits: The number of bits in this netmask.
 
 .. class:: Netmask
+
+  .. versionadded:: 1.5.0
 
    Represents a netmask.
 

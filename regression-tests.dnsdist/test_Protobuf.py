@@ -91,13 +91,6 @@ class DNSDistProtobufTest(DNSDistTest):
         msg.ParseFromString(data)
         return msg
 
-    # let the protobuf messages the time to get there
-    def waitUntilPBQueueIsNoLongerEmpty(self, timeout=1):
-        remaining = timeout * 1000  # milliseconds
-        while self._protobufQueue.empty() and remaining > 0:
-            time.sleep(0.01)
-            remaining -= 10
-
     def checkProtobufBase(self, msg, protocol, query, initiator, normalQueryResponse=True, v6=False, flags=None):
         self.assertTrue(msg)
         self.assertTrue(msg.HasField("timeSec"))
@@ -314,7 +307,9 @@ class TestProtobuf(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the UDP query
         msg = self.getFirstProtobufMessage()
@@ -345,7 +340,9 @@ class TestProtobuf(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the TCP query
         msg = self.getFirstProtobufMessage()
@@ -387,7 +384,9 @@ class TestProtobuf(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the UDP query
         msg = self.getFirstProtobufMessage()
@@ -417,7 +416,9 @@ class TestProtobuf(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the TCP query
         msg = self.getFirstProtobufMessage()
@@ -507,7 +508,9 @@ class TestProtobufMetaTags(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the UDP query
         msg = self.getFirstProtobufMessage()
@@ -583,250 +586,6 @@ class TestProtobufMetaTags(DNSDistProtobufTest):
         self.assertIn(42, msg.meta[4].value.intVal)
 
 
-class TestProtobufTagsPrefix(DNSDistProtobufTest):
-    _config_params = ["_testServerPort", "_protobufServerPort"]
-    _config_template = """
-    newServer{address="127.0.0.1:%d"}
-    rl = newRemoteLogger('127.0.0.1:%d')
-
-    addAction(AllRule(), SetTagAction('my-tag-key', 'my-tag-value'))
-    addAction(AllRule(), SetTagAction('pdns-tag-key', 'pdns-tag-value'))
-    addAction(AllRule(), SetTagAction('powerdns-empty-key', ''))
-    addAction(AllRule(), RemoteLogAction(rl, nil, {serverID='dnsdist-server-1', exportTagsPrefixes='pdns-,powerdns-'}))
-    """
-
-    def testProtobufTagsPrefix(self):
-        """
-        Protobuf: Tags prefixes
-        """
-        name = "tags-prefixes.protobuf.tests.powerdns.com."
-        query = dns.message.make_query(name, "A", "IN")
-        response = dns.message.make_response(query)
-        rrset = dns.rrset.from_text(name, 3600, dns.rdataclass.IN, dns.rdatatype.A, "127.0.0.1")
-        response.answer.append(rrset)
-
-        (receivedQuery, receivedResponse) = self.sendUDPQuery(query, response)
-        self.assertTrue(receivedQuery)
-        self.assertTrue(receivedResponse)
-        receivedQuery.id = query.id
-        self.assertEqual(query, receivedQuery)
-        self.assertEqual(response, receivedResponse)
-
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
-
-        # check the protobuf message corresponding to the UDP query
-        msg = self.getFirstProtobufMessage()
-
-        self.checkProtobufQuery(msg, dnsmessage_pb2.PBDNSMessage.UDP, query, dns.rdataclass.IN, dns.rdatatype.A, name)
-        # regular tags
-        self.assertEqual(len(msg.response.tags), 2)
-        self.assertIn("pdns-tag-key:pdns-tag-value", msg.response.tags)
-        self.assertIn("powerdns-empty-key", msg.response.tags)
-
-
-class TestProtobufTagsPrefixYAML(DNSDistProtobufTest):
-    _yaml_config_template = """---
-binds:
-  - listen_address: "127.0.0.1:%d"
-    reuseport: true
-    protocol: Do53
-
-backends:
-  - address: "127.0.0.1:%d"
-    protocol: Do53
-
-remote_logging:
-  protobuf_loggers:
-    - name: "my-logger"
-      address: "127.0.0.1:%d"
-      timeout: 1
-
-query_rules:
-  - selector:
-      type: "All"
-    action:
-      type: "SetTag"
-      tag: "my-tag-key"
-      value: "my-tag-value"
-  - selector:
-      type: "All"
-    action:
-      type: "SetTag"
-      tag: "pdns-tag-key"
-      value: "pdns-tag-value"
-  - selector:
-      type: "All"
-    action:
-      type: "SetTag"
-      tag: "powerdns-empty-key"
-      value: ""
-  - selector:
-      type: "All"
-    action:
-      type: "RemoteLog"
-      logger_name: "my-logger"
-      server_id: "%s"
-      export_tags_prefixes:
-        - "pdns-"
-        - "powerdns-"
-"""
-    _dnsDistPort = pickAvailablePort()
-    _testServerPort = pickAvailablePort()
-    _yaml_config_params = ["_dnsDistPort", "_testServerPort", "_protobufServerPort", "_protobufServerID"]
-    _config_params = []
-
-    def testProtobufTagsPrefix(self):
-        """
-        Protobuf: Tags prefixes (YAML)
-        """
-        name = "tags-prefixes-yaml.protobuf.tests.powerdns.com."
-        query = dns.message.make_query(name, "A", "IN")
-        response = dns.message.make_response(query)
-        rrset = dns.rrset.from_text(name, 3600, dns.rdataclass.IN, dns.rdatatype.A, "127.0.0.1")
-        response.answer.append(rrset)
-
-        (receivedQuery, receivedResponse) = self.sendUDPQuery(query, response)
-        self.assertTrue(receivedQuery)
-        self.assertTrue(receivedResponse)
-        receivedQuery.id = query.id
-        self.assertEqual(query, receivedQuery)
-        self.assertEqual(response, receivedResponse)
-
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
-
-        # check the protobuf message corresponding to the UDP query
-        msg = self.getFirstProtobufMessage()
-
-        self.checkProtobufQuery(msg, dnsmessage_pb2.PBDNSMessage.UDP, query, dns.rdataclass.IN, dns.rdatatype.A, name)
-        # regular tags
-        self.assertEqual(len(msg.response.tags), 2)
-        self.assertIn("pdns-tag-key:pdns-tag-value", msg.response.tags)
-        self.assertIn("powerdns-empty-key", msg.response.tags)
-
-
-class TestProtobufTagsPrefixStrip(DNSDistProtobufTest):
-    _config_params = ["_testServerPort", "_protobufServerPort"]
-    _config_template = """
-    newServer{address="127.0.0.1:%d"}
-    rl = newRemoteLogger('127.0.0.1:%d')
-
-    addAction(AllRule(), SetTagAction('my-tag-key', 'my-tag-value'))
-    addAction(AllRule(), SetTagAction('pdns-tag-key', 'pdns-tag-value'))
-    addAction(AllRule(), SetTagAction('powerdns-empty-key', ''))
-    addAction(AllRule(), RemoteLogAction(rl, nil, {serverID='dnsdist-server-1', exportTagsPrefixes='pdns-,powerdns-', exportTagsKeyOnly=true, exportTagsStripPrefixes=true}))
-    """
-
-    def testProtobufTagsPrefix(self):
-        """
-        Protobuf: Tags prefixes (key only, strip prefixes)
-        """
-        name = "tags-prefixes-strip.protobuf.tests.powerdns.com."
-        query = dns.message.make_query(name, "A", "IN")
-        response = dns.message.make_response(query)
-        rrset = dns.rrset.from_text(name, 3600, dns.rdataclass.IN, dns.rdatatype.A, "127.0.0.1")
-        response.answer.append(rrset)
-
-        (receivedQuery, receivedResponse) = self.sendUDPQuery(query, response)
-        self.assertTrue(receivedQuery)
-        self.assertTrue(receivedResponse)
-        receivedQuery.id = query.id
-        self.assertEqual(query, receivedQuery)
-        self.assertEqual(response, receivedResponse)
-
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
-
-        # check the protobuf message corresponding to the UDP query
-        msg = self.getFirstProtobufMessage()
-
-        self.checkProtobufQuery(msg, dnsmessage_pb2.PBDNSMessage.UDP, query, dns.rdataclass.IN, dns.rdatatype.A, name)
-        # regular tags
-        self.assertEqual(len(msg.response.tags), 2)
-        self.assertIn("tag-key", msg.response.tags)
-        self.assertIn("empty-key", msg.response.tags)
-
-
-class TestProtobufTagsPrefixStripYAML(DNSDistProtobufTest):
-    _yaml_config_template = """---
-binds:
-  - listen_address: "127.0.0.1:%d"
-    reuseport: true
-    protocol: Do53
-
-backends:
-  - address: "127.0.0.1:%d"
-    protocol: Do53
-
-remote_logging:
-  protobuf_loggers:
-    - name: "my-logger"
-      address: "127.0.0.1:%d"
-      timeout: 1
-
-query_rules:
-  - selector:
-      type: "All"
-    action:
-      type: "SetTag"
-      tag: "my-tag-key"
-      value: "my-tag-value"
-  - selector:
-      type: "All"
-    action:
-      type: "SetTag"
-      tag: "pdns-tag-key"
-      value: "pdns-tag-value"
-  - selector:
-      type: "All"
-    action:
-      type: "SetTag"
-      tag: "powerdns-empty-key"
-      value: ""
-  - selector:
-      type: "All"
-    action:
-      type: "RemoteLog"
-      logger_name: "my-logger"
-      server_id: "%s"
-      export_tags_prefixes:
-        - "pdns-"
-        - "powerdns-"
-      export_tags_key_only: true
-      export_tags_strip_prefixes: true
-"""
-    _dnsDistPort = pickAvailablePort()
-    _testServerPort = pickAvailablePort()
-    _yaml_config_params = ["_dnsDistPort", "_testServerPort", "_protobufServerPort", "_protobufServerID"]
-    _config_params = []
-
-    def testProtobufTagsPrefix(self):
-        """
-        Protobuf: Tags prefixes (YAML, key only, strip prefixes)
-        """
-        name = "tags-prefixes-strip-yaml.protobuf.tests.powerdns.com."
-        query = dns.message.make_query(name, "A", "IN")
-        response = dns.message.make_response(query)
-        rrset = dns.rrset.from_text(name, 3600, dns.rdataclass.IN, dns.rdatatype.A, "127.0.0.1")
-        response.answer.append(rrset)
-
-        (receivedQuery, receivedResponse) = self.sendUDPQuery(query, response)
-        self.assertTrue(receivedQuery)
-        self.assertTrue(receivedResponse)
-        receivedQuery.id = query.id
-        self.assertEqual(query, receivedQuery)
-        self.assertEqual(response, receivedResponse)
-
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
-
-        # check the protobuf message corresponding to the UDP query
-        msg = self.getFirstProtobufMessage()
-
-        self.checkProtobufQuery(msg, dnsmessage_pb2.PBDNSMessage.UDP, query, dns.rdataclass.IN, dns.rdatatype.A, name)
-        # regular tags
-        self.assertEqual(len(msg.response.tags), 2)
-        self.assertIn("tag-key", msg.response.tags)
-        self.assertIn("empty-key", msg.response.tags)
-
-
 class TestProtobufExtendedDNSErrorTags(DNSDistProtobufTest):
     _config_params = ["_testServerPort", "_protobufServerPort"]
     _config_template = """
@@ -856,7 +615,9 @@ class TestProtobufExtendedDNSErrorTags(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the UDP query
         msg = self.getFirstProtobufMessage()
@@ -910,7 +671,9 @@ class TestProtobufCacheHit(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the UDP response
         msg = self.getFirstProtobufMessage()
@@ -925,7 +688,9 @@ class TestProtobufCacheHit(DNSDistProtobufTest):
         self.assertTrue(receivedResponse)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the UDP response
         msg = self.getFirstProtobufMessage()
@@ -987,7 +752,9 @@ class TestProtobufMetaDOH(DNSDistProtobufTest):
             self.assertEqual(query, receivedQuery)
             self.assertEqual(response, receivedResponse)
 
-            self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+            if self._protobufQueue.empty():
+                # let the protobuf messages the time to get there
+                time.sleep(1)
 
             # check the protobuf message corresponding to the query
             msg = self.getFirstProtobufMessage()
@@ -1084,7 +851,9 @@ class TestProtobufMetaProxy(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the UDP query
         msg = self.getFirstProtobufMessage()
@@ -1146,7 +915,9 @@ class TestProtobufIPCipher(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the UDP query
         msg = self.getFirstProtobufMessage()
@@ -1175,7 +946,9 @@ class TestProtobufIPCipher(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the TCP query
         msg = self.getFirstProtobufMessage()
@@ -1230,7 +1003,9 @@ class TestProtobufIPCrypt2PFX(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the UDP query
         msg = self.getFirstProtobufMessage()
@@ -1259,7 +1034,9 @@ class TestProtobufIPCrypt2PFX(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf message corresponding to the TCP query
         msg = self.getFirstProtobufMessage()
@@ -1328,7 +1105,9 @@ class TestProtobufQUIC(DNSDistProtobufTest):
             self.assertEqual(query, receivedQuery)
             self.assertEqual(response, receivedResponse)
 
-            self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+            if self._protobufQueue.empty():
+                # let the protobuf messages the time to get there
+                time.sleep(1)
 
             # check the protobuf message corresponding to the query
             msg = self.getFirstProtobufMessage()
@@ -1445,7 +1224,9 @@ class TestProtobufAXFR(DNSDistProtobufTest):
         self.assertEqual(query, receivedQuery)
         self.assertEqual(len(receivedResponses), len(responses))
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
 
         # check the protobuf messages corresponding to the responses
         count = 0
@@ -1520,14 +1301,16 @@ query_rules:
             self.assertEqual(receivedQuery, query)
             self.assertEqual(receivedResponse, response)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
-
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
         # check the protobuf message corresponding to the UDP query
         msg = self.getFirstProtobufMessage()
         self.checkProtobufQuery(msg, dnsmessage_pb2.PBDNSMessage.UDP, query, dns.rdataclass.IN, dns.rdatatype.A, name)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
-
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
         # TCP query
         msg = self.getFirstProtobufMessage()
         self.checkProtobufQuery(msg, dnsmessage_pb2.PBDNSMessage.TCP, query, dns.rdataclass.IN, dns.rdatatype.A, name)
@@ -1590,14 +1373,16 @@ response_rules:
             self.assertEqual(receivedResponse, response)
             receivedResponses.append(receivedResponse)
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
-
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
         # check the protobuf message corresponding to the UDP query
         msg = self.getFirstProtobufMessage()
         self.checkProtobufResponse(msg, dnsmessage_pb2.PBDNSMessage.UDP, receivedResponses[0])
 
-        self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
-
+        if self._protobufQueue.empty():
+            # let the protobuf messages the time to get there
+            time.sleep(1)
         # TCP query
         msg = self.getFirstProtobufMessage()
         self.checkProtobufResponse(msg, dnsmessage_pb2.PBDNSMessage.TCP, receivedResponses[1])
@@ -1661,7 +1446,8 @@ timeout_response_rules:
         waited = 0
         while (not gotUDP or not gotTCP) and waited <= 4:
             if self._protobufQueue.empty():
-                self.waitUntilPBQueueIsNoLongerEmpty(timeout=1)
+                # let the protobuf messages the time to get there
+                time.sleep(1)
                 waited += 1
                 if self._protobufQueue.empty():
                     continue

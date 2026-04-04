@@ -153,20 +153,11 @@ public:
   {
     return d_content;
   }
-  bool eof() const { return true; } // we don't know how long the record should be
+  bool eof() { return true; } // we don't know how long the record should be
 
-  std::string getRemaining() const {
+  const string getRemaining() const {
     return "";
   }
-
-#if defined(PDNS_AUTH) // [
-  /* This method is only there for parity with DNSParser::consumeRemaining(),
-     see the comment there to know why it is needed.
-  */
-  void consumeRemaining() const
-  {
-  }
-#endif // ]
 
   size_t getSizeWithOpts(const optvect_t& options) const;
 

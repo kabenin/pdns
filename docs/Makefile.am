@@ -88,13 +88,10 @@ if !HAVE_MANPAGES
 endif
 	rm -rf mans
 
-http-api/swagger/authoritative-api-schema.yaml: .venv generate-jsonschema.py http-api/swagger/authoritative-api-swagger.yaml
-	.venv/bin/python ./generate-jsonschema.py http-api/swagger/authoritative-api-swagger.yaml $@
-
-html-docs: common/** manpages/** .venv *.rst http-api/swagger/authoritative-api-schema.yaml
+html-docs: common/** manpages/** .venv *.rst
 	.venv/bin/python -msphinx -b html . html-docs
 
-latex/PowerDNS-Authoritative.pdf: common/** manpages/** .venv *.rst http-api/swagger/authoritative-api-schema.yaml
+latex/PowerDNS-Authoritative.pdf: common/** manpages/** .venv *.rst
 	.venv/bin/python -msphinx -M latexpdf . .
 
 PowerDNS-Authoritative.pdf: latex/PowerDNS-Authoritative.pdf
